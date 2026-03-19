@@ -17,15 +17,27 @@ When Force Barrage is cast, this module opens a dialog to assign shards to targe
 
 ## Installation
 
-### Manual install
+### Recommended: Install via Foundry module manager
 
-1. Download or clone the repository into your Foundry `Data/modules/` folder (or create a junction/symlink pointing to it).
-2. Make sure `module.json` is at the top level of the `force-barrage` folder.
-3. Restart Foundry or reload your world.
+1. Go to **Settings → Manage Modules** and click **Install Module**.
+2. Paste this link into the "Manifest URL" field:
+   ```
+   https://raw.githubusercontent.com/austin-vote/force-barrage-2e-automation/main/module.json
+   ```
+3. Click **Install**.
+4. Check **Force Barrage Automation** to enable it.
+5. Restart Foundry or reload your world.
 
-### Enable it
+### Alternative: Manual install
 
-Go to **Settings → Manage Modules** and check **Force Barrage Automation**.
+1. Download or clone the repository:
+   ```
+   https://github.com/austin-vote/force-barrage-2e-automation
+   ```
+2. Place it in your Foundry `Data/modules/` folder (or create a junction/symlink pointing to it).
+3. Make sure `module.json` is at the top level of the `force-barrage` folder.
+4. Restart Foundry or reload your world.
+5. Go to **Settings → Manage Modules** and check **Force Barrage Automation**.
 
 ---
 
@@ -38,8 +50,6 @@ Go to **Settings → Manage Modules** and check **Force Barrage Automation**.
 5. If multiple targets, assign shards to each — the total must match.
 6. Click **Roll**.
 7. Apply damage from the chat card using PF2e's native buttons.
-
-You can also run the provided macro (see [Macro](#macro) below) at any time — useful when casting from a custom item.
 
 ---
 
@@ -109,35 +119,6 @@ All settings are under **Settings → Module Settings → Force Barrage Automati
 
 ---
 
-## Macro
-
-Create a **Script** macro in Foundry and paste this in:
-
-```js
-const mod = game.modules.get("force-barrage");
-
-if (!mod?.active) {
-  ui.notifications.error(
-    "Force Barrage module is not active. Enable it in Settings → Manage Modules.",
-  );
-} else if (typeof mod.api?.openDialog !== "function") {
-  ui.notifications.error(
-    "Force Barrage API not found — try reloading Foundry (F5).",
-  );
-} else {
-  mod.api.openDialog();
-}
-```
-
-**Usage:**
-1. Select (control-click) your caster's token.
-2. Target enemy tokens with the targeting tool.
-3. Run the macro.
-
-The dialog opens with the caster pre-filled and current targets loaded. Also saved at [`macros/force-barrage.js`](macros/force-barrage.js).
-
----
-
 ## Troubleshooting
 
 ### The dialog never opens automatically
@@ -150,12 +131,6 @@ To inspect slugs manually with a token selected:
 ```js
 _token.actor.items.filter(i => i.type === "spell").map(i => ({ name: i.name, slug: i.slug }))
 ```
-
-### Shard count looks wrong
-
-The formula is `actions × (1 + floor((rank − 1) / 2))`. The dialog shows the total prominently. If the pre-filled rank is wrong (e.g. from a scroll cast at base rank), adjust it manually in the dialog.
-
----
 
 ## Known limitations
 
