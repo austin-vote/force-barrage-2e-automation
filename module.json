@@ -1,0 +1,29 @@
+{
+  "id": "force-barrage",
+  "title": "Force Barrage Automation",
+  "description": "Automates Force Barrage (PF2e) shard calculation, multi-target assignment, and damage rolling for any cast source (spell, wand, scroll, etc.).",
+  "version": "0.1.0",
+  "compatibility": {
+    "minimum": "13",
+    "verified": "13"
+  },
+  "relationships": {
+    "systems": [
+      {
+        "id": "pf2e",
+        "type": "system",
+        "compatibility": {
+          "minimum": "7.0.0"
+        }
+      }
+    ]
+  },
+  "authors": [
+    {
+      "name": "austi"
+    }
+  ],
+  "esmodules": [
+    "scripts/main.js"
+  ]
+}
