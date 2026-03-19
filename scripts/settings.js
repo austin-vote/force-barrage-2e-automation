@@ -12,12 +12,4 @@ export function registerSettings() {
     onChange: () => refreshDebug(),
   });
 
-  game.settings.register(MODULE_ID, "autoIntercept", {
-    name: "Auto-Intercept Casts",
-    hint: "Automatically open the Force Barrage dialog when a Force Barrage spell is cast from chat. Disable if you prefer to use the manual macro only.",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: true,
-  });
 }

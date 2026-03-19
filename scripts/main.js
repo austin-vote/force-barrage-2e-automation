@@ -20,13 +20,6 @@ Hooks.once("ready", () => {
     const authorId = message.author?.id ?? message.user?.id ?? message.userId;
     if (!game.user.isGM && game.user.id !== authorId) return;
 
-    try {
-      const autoIntercept = game.settings.get(MODULE_ID, "autoIntercept");
-      if (!autoIntercept) return;
-    } catch {
-      return;
-    }
-
     // Skip messages this module created
     if (message.flags?.[MODULE_ID]) return;
 
