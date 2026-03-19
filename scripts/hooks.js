@@ -11,19 +11,10 @@ const NAME_PATTERNS = ["force barrage", "magic missile"];
 const VALID_NAMES = new Set(NAME_PATTERNS);
 
 /**
- * Returns the user-overridden slug list, or the built-in defaults.
+ * Returns the built-in slug list for detection.
  * @returns {string[]}
  */
 export function getSpellSlugs() {
-  try {
-    const override = game.settings.get(MODULE_ID, "spellSlugs");
-    if (override && override.trim().length > 0) {
-      return override
-        .split(",")
-        .map((s) => s.trim().toLowerCase())
-        .filter(Boolean);
-    }
-  } catch {}
   return FORCE_BARRAGE_SLUGS;
 }
 

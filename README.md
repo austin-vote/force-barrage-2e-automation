@@ -2,7 +2,7 @@
 
 A Foundry VTT module for **Pathfinder 2e** that automates **Force Barrage** shard calculation, multi-target assignment, and damage rolling — for any cast source (spell, wand, scroll, staff, etc.).
 
-When Force Barrage is cast, this module opens a dialog to assign shards to targets, then rolls the correct damage formulas and posts them to chat. The GM can apply directly via the module or leave PF2e's native apply-damage button on the chat card for manual use.
+When Force Barrage is cast, this module opens a dialog to assign shards to targets, then rolls the correct damage formulas and posts them to chat. The GM applies damage using PF2e's native chat card buttons — the module never touches HP directly.
 
 ---
 
@@ -36,9 +36,10 @@ Go to **Settings → Manage Modules** and check **Force Barrage Automation**.
 1. Target one or more enemy tokens via Foundry's targeting tool (**T** key by default).
 2. Cast Force Barrage from a character sheet, wand, scroll, or staff.
 3. The module detects the cast and opens the Force Barrage dialog automatically.
-4. Confirm the action count, spell rank, and optional flat bonus (e.g. Dangerous Sorcery).
-5. Assign shards to each targeted token — the total must match.
-6. Click **Roll Only** or **Roll & Apply**.
+4. Pick actions (1/2/3) and confirm the spell rank.
+5. If multiple targets, assign shards to each — the total must match.
+6. Click **Roll**.
+7. Apply damage from the chat card using PF2e's native buttons.
 
 ### Manual macro mode
 
@@ -64,23 +65,7 @@ shards = actions × (1 + floor((rank − 1) / 2))
 
 **Multi-target:** Shards are split freely across targets. Each target's shards are combined into one roll — for example, 3 shards to one target rolls `(3d4 + 3)[force]`.
 
-**Flat bonus** (e.g. Dangerous Sorcery, Sorcerous Potency): Applied **once per target**, not per shard. A +2 bonus with 3 shards to one target rolls `(3d4 + 5)[force]`.
-
----
-
-## Roll Only vs Roll & Apply
-
-| | Roll Only | Roll & Apply |
-|---|---|---|
-| Posts damage card | ✅ | ✅ |
-| PF2e apply-damage button on card | ✅ — use it to apply | ❌ — omitted to prevent double-apply |
-| Flavor badge | — | `(applied)` |
-| Modifies HP immediately | ❌ | ✅ via `actor.applyDamage` |
-| Works without targets | ✅ | ❌ — disabled |
-
-**Roll Only** is the safer default. PF2e's native apply button on the chat card lets the GM inspect the roll before applying, and handles IWR (immunities, weaknesses, resistances) automatically.
-
-**Roll & Apply** applies damage immediately using PF2e's `actor.applyDamage()` API — IWR-aware, no direct HP mutation. If the API is unavailable (PF2e version mismatch), the module warns and falls back to Roll Only behavior — it will **never** directly mutate `system.attributes.hp`.
+**Flat bonus** (e.g. Dangerous Sorcery): Applied **once per target**, not per shard. A +2 bonus with 3 shards to one target rolls `(3d4 + 5)[force]`. Set via the Advanced section in the dialog.
 
 ---
 
@@ -88,9 +73,21 @@ shards = actions × (1 + floor((rank − 1) / 2))
 
 If no tokens are targeted when the dialog opens:
 
-- The dialog shows a clear **warning banner** — no misleading "All Targets" label.
-- The **Roll & Apply** button is disabled. HP will never be touched without a resolved target token.
-- **Roll Only** remains available for unresolved / untargeted damage cards.
+- A small inline note appears: "No targets selected. Damage will not be auto-applied."
+- Rolling still works — you just won't get PF2e's apply-damage buttons on the chat card.
+- The module **never** touches HP directly. All damage application goes through PF2e's native chat card buttons.
+
+---
+
+## Chat output
+
+Each target gets a single chat card containing:
+- A flavor header: **Force Barrage** — Rank X, Y actions
+- The target name and shard count
+- The rolled damage formula
+- PF2e's native Apply Damage buttons (when a target token was selected)
+
+No separate summary card. No spam.
 
 ---
 
@@ -114,8 +111,6 @@ All settings are under **Settings → Module Settings → Force Barrage Automati
 |---|---|---|
 | **Debug Logging** | Off | Turns on detailed console output (F12) for troubleshooting. |
 | **Auto-Intercept Casts** | On | Automatically opens the dialog when a Force Barrage cast is detected in chat. Disable to use the manual macro only. |
-| **Spell Slug Overrides** | *(empty)* | Override which item slugs the module matches. Comma-separated. Leave blank to use built-in defaults. |
-| **Confirm Before Applying Damage** | Off | When using Roll & Apply, show a confirmation dialog before HP is modified. |
 
 ---
 
@@ -154,7 +149,7 @@ The dialog opens with the caster pre-filled and current targets loaded. Also sav
 
 1. **Is the module enabled?** Check Settings → Manage Modules.
 2. **Is Auto-Intercept on?** Check module settings.
-3. **Does the slug match?** Enable Debug Logging, then cast the spell and check the browser console (F12) — it will show which layer was checked and what slug/name was found. If the slug doesn't match built-in defaults, paste it into **Spell Slug Overrides**.
+3. **Does the slug match?** Enable Debug Logging, then cast the spell and check the browser console (F12) — it will show which layer was checked and what slug/name was found.
 4. **Are you the GM or the spell's caster?** The module only intercepts messages authored by the current user or the GM — it won't fire for a different player's cast on your client.
 
 To inspect slugs manually with a token selected:
@@ -162,22 +157,16 @@ To inspect slugs manually with a token selected:
 _token.actor.items.filter(i => i.type === "spell").map(i => ({ name: i.name, slug: i.slug }))
 ```
 
-### Roll & Apply isn't applying damage
-
-1. Make sure at least one token is targeted before submitting — without a `tokenUuid`, `applyDamage` can't run.
-2. Enable Debug Logging and check the console — it will say whether `applyDamage` was called and what it returned.
-3. If you see `actor.applyDamage unavailable`, your PF2e version may not expose that method. Use Roll Only and apply via the chat card instead.
-
 ### Shard count looks wrong
 
-The formula is `actions × (1 + floor((rank − 1) / 2))`. The dialog's shard summary line shows the full calculation. If the pre-filled rank is wrong (e.g. from a scroll cast at the base rank), adjust it manually in the dialog.
+The formula is `actions × (1 + floor((rank − 1) / 2))`. The dialog shows the total prominently. If the pre-filled rank is wrong (e.g. from a scroll cast at base rank), adjust it manually in the dialog.
 
 ---
 
 ## Known limitations
 
-1. **Rank pre-fill accuracy.** PF2e always provides `castRank` / `castLevel` for heightened casts; if those fields are absent (some older consumable formats), the module falls back to `rank` / `level` and logs a warning. The rank is always editable in the dialog.
-2. **Flat bonus auto-detection.** The module reads `actor.synthetics.modifiers["spell-damage"]` for bonus values. If the bonus comes from a feat whose value isn't in synthetics (e.g. Dangerous Sorcery in some PF2e versions), the dialog pre-fills 0 and logs a hint — use the manual input field.
+1. **Rank pre-fill accuracy.** PF2e provides `castRank` / `castLevel` for heightened casts; if those fields are absent (some older consumable formats), the module falls back to `rank` / `level` and logs a warning. The rank is always editable in the dialog.
+2. **Flat bonus auto-detection.** The module reads `actor.synthetics.modifiers["spell-damage"]` for bonus values. If the bonus comes from a feat whose value isn't in synthetics, the dialog pre-fills 0 — use the manual input in the Advanced section.
 3. **PF2e version sensitivity.** The module reads PF2e-specific data structures. A major system update could change these. If the module stops working after an update, check the GitHub for a fix.
 
 ---

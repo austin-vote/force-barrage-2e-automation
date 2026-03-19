@@ -20,22 +20,4 @@ export function registerSettings() {
     type: Boolean,
     default: true,
   });
-
-  game.settings.register(MODULE_ID, "spellSlugs", {
-    name: "Spell Slug Overrides",
-    hint: "Comma-separated item slugs to match Force Barrage casts. Leave blank to use built-in defaults.",
-    scope: "world",
-    config: true,
-    type: String,
-    default: "",
-  });
-
-  game.settings.register(MODULE_ID, "confirmBeforeApply", {
-    name: "Confirm Before Applying Damage",
-    hint: "When using Roll & Apply, show a confirmation dialog before modifying target HP.",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: false,
-  });
 }
