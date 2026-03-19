@@ -59,16 +59,6 @@ When Force Barrage is cast, this module opens a dialog to assign shards to targe
 
 ---
 
-## No-target behavior
-
-If no tokens are targeted when the dialog opens:
-
-- A small inline note appears: "No targets — roll will have no apply buttons."
-- Rolling still works — you just won't get PF2e's apply-damage buttons on the chat card.
-- The module **never** touches HP directly. All damage application goes through PF2e's native chat card buttons.
-
----
-
 ## Chat output
 
 Each target gets a single chat card containing:
