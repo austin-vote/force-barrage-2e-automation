@@ -262,7 +262,7 @@ async function onSubmit(html, { actorId, tokenId, dlg }) {
     actions,
     rank,
     flatBonus,
-    shards,
+    totalShards: shards,
     assignments,
     actorId,
     tokenId,

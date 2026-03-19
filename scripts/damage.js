@@ -27,9 +27,12 @@ function getDamageRollClass() {
  * @param {object} opts
  * @param {number} opts.actions
  * @param {number} opts.rank
- * @param {number} opts.flatBonus
- * @param {number} opts.shards       - Total shards (for summary).
- * @param {Array}  opts.assignments  - [{ targetId, actorUuid, tokenUuid, name, shards }]
+ * @param {number} opts.flatBonus     - Global flat spell-damage bonus fallback (used when a
+ *                                       target assignment does not carry its own flatBonus).
+ * @param {number} opts.totalShards   - Grand total shards across all targets (flavor text only).
+ * @param {Array}  opts.assignments   - [{ targetId, actorUuid, tokenUuid, name, shards, flatBonus? }]
+ *                                       Each assignment may carry an optional per-target flatBonus
+ *                                       that takes precedence over the global one.
  * @param {string|null} opts.actorId
  * @param {string|null} opts.tokenId
  */
@@ -37,7 +40,7 @@ export async function rollAndSendDamage({
   actions,
   rank,
   flatBonus,
-  shards,
+  totalShards,
   assignments,
   actorId,
   tokenId,
@@ -45,7 +48,7 @@ export async function rollAndSendDamage({
   const speaker = buildSpeaker(actorId, tokenId);
 
   for (const target of assignments) {
-    await rollForTarget({ target, flatBonus, actions, rank, shards, speaker, totalAssignments: assignments.length });
+    await rollForTarget({ target, flatBonus, actions, rank, totalShards, speaker, totalAssignments: assignments.length });
   }
 }
 
@@ -54,16 +57,20 @@ export async function rollAndSendDamage({
  * Always includes pf2e.target when a tokenUuid is available so PF2e
  * renders its native Apply Damage buttons.
  */
-async function rollForTarget({ target, flatBonus, actions, rank, shards, speaker, totalAssignments }) {
-  const formula = shardFormula(target.shards, flatBonus);
+async function rollForTarget({ target, flatBonus, actions, rank, totalShards, speaker, totalAssignments }) {
+  // Per-target bonus takes precedence; fall back to the global bonus, then 0.
+  const bonus = target.flatBonus ?? flatBonus ?? 0;
+  const formula = shardFormula(target.shards, bonus);
   const typedFormula = `(${formula})[${FORCE_DAMAGE_TYPE}]`;
 
-  log(`rollForTarget: ${target.name} — ${target.shards} shard(s), flatBonus=${flatBonus}, formula=${typedFormula}`);
+  log(`rollForTarget: target=${target.name} shards=${target.shards} bonus=${bonus} formula=${typedFormula}`)
 
   try {
     const DamageRoll = getDamageRollClass();
     const roll = new DamageRoll(typedFormula);
-    await roll.evaluate();
+    // { async: true } is required in Foundry v10+ — synchronous evaluation
+    // can silently fail for DamageRoll and other complex roll types.
+    await roll.evaluate({ async: true });
 
     const total = Number(roll.total ?? 0);
     if (!Number.isFinite(total) || total < 0) {
@@ -71,10 +78,11 @@ async function rollForTarget({ target, flatBonus, actions, rank, shards, speaker
       return;
     }
 
-    const flavor = buildFlavor({ target, actions, rank, shards, totalAssignments });
+    const flavor = buildFlavor({ target, actions, rank, totalShards, totalAssignments });
 
-    // Always include pf2e.target when we have a token — this makes PF2e
-    // render its native apply-damage buttons on the chat card.
+    // pf2e.target is required for PF2e's native apply-damage buttons to appear.
+    // Actor-only assignments (no tokenUuid) will NOT show those buttons — this
+    // is by design since we cannot guarantee token context in all scenarios.
     const pf2eTarget = target.tokenUuid
       ? { actor: target.actorUuid ?? null, token: target.tokenUuid }
       : undefined;
@@ -84,10 +92,11 @@ async function rollForTarget({ target, flatBonus, actions, rank, shards, speaker
       flavor,
       flags: {
         pf2e: {
+          // context.options omitted: "item:force-barrage" is not a recognized
+          // PF2e roll option and does not affect weakness/resistance checks.
           context: {
             type: "damage-roll",
             sourceType: "spell",
-            options: ["item:force-barrage"],
           },
           ...(pf2eTarget ? { target: pf2eTarget } : {}),
         },
@@ -106,7 +115,7 @@ async function rollForTarget({ target, flatBonus, actions, rank, shards, speaker
 
 /* ---------- helpers ---------- */
 
-function buildFlavor({ target, actions, rank, shards, totalAssignments }) {
+function buildFlavor({ target, actions, rank, totalShards, totalAssignments }) {
   const targetLine =
     target.targetId === "untargeted"
       ? ""
@@ -115,7 +124,7 @@ function buildFlavor({ target, actions, rank, shards, totalAssignments }) {
   return [
     `<div style="border-left: 3px solid #3d85c6; padding-left: 8px; margin-bottom: 4px;">`,
     `  <strong style="color: #3d85c6;">Force Barrage</strong>`,
-    `  <span class="notes" style="color:#888;"> — Rank ${rank}, ${actions} action${actions !== 1 ? "s" : ""}${totalAssignments > 1 ? `, ${shards} total shards` : ""}</span>`,
+    `  <span class="notes" style="color:#888;"> — Rank ${rank}, ${actions} action${actions !== 1 ? "s" : ""}${totalAssignments > 1 ? `, ${totalShards} total shards` : ""}</span>`,
     `  ${targetLine}`,
     `</div>`,
   ].join("\n");
