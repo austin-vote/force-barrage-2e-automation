@@ -206,61 +206,173 @@ function asStringOrNull(v) {
 
 /* ---------- spell damage bonus ---------- */
 
+const BONUS_TYPES = new Set(["status", "circumstance", "item", "untyped"]);
+
 /**
- * Try to resolve a flat spell-damage bonus from the actor's PF2e synthetics.
- * Returns 0 when the bonus cannot be reliably determined (the dialog exposes a
- * manual input as a fallback).
+ * Resolve flat spell-damage bonuses from the caster's PF2e data.
+ *
+ * Strategy (most reliable first):
+ *   1. actor.synthetics.modifiers["spell-damage"] — PF2e's native modifier
+ *      pipeline.  Entries may be pre-resolved Modifier objects or deferred
+ *      functions; we handle both.
+ *   2. Item rule-element scan — looks for FlatModifier rules targeting
+ *      "spell-damage" on feats/features/effects and tries to resolve the
+ *      value (including simple @spell.rank references).
+ *
+ * Stacking: status / circumstance / item — only the highest of each type
+ * applies. Untyped always stacks.  This mirrors PF2e's own rules.
  *
  * @param {string|null} actorId
- * @returns {number}
+ * @param {number}      rank - Current spell rank (used to resolve rank-dependent values).
+ * @returns {{ bonus: number, sources: Array<{label: string, type: string, value: number}> }}
  */
-export function getSpellDamageBonus(actorId) {
-  if (!actorId) return 0;
+export function getSpellDamageBonus(actorId, rank = 1) {
+  const empty = Object.freeze({ bonus: 0, sources: [] });
+  if (!actorId) return empty;
+
   try {
     const actor = game.actors.get(actorId);
-    if (!actor) return 0;
+    if (!actor) return empty;
 
-    // Only check "spell-damage" selector — "damage" is too broad and
-    // would include weapon/unarmed bonuses that don't apply here.
-    const synthetics = actor.synthetics;
-    if (synthetics?.modifiers) {
-      const mods = synthetics.modifiers["spell-damage"];
-      if (Array.isArray(mods)) {
-        let bonus = 0;
-        for (const mod of mods) {
-          if (typeof mod.value !== "number" || mod.value <= 0) continue;
-          const type = mod.type ?? "";
-          if (
-            type === "status" ||
-            type === "circumstance" ||
-            type === "item" ||
-            type === "untyped"
-          ) {
-            bonus += mod.value;
-            log(
-              `getSpellDamageBonus: found ${mod.label ?? mod.slug ?? "modifier"} (${type}) = +${mod.value}`,
-            );
-          }
-        }
-        if (bonus > 0) return bonus;
-      }
+    // --- Approach 1: PF2e synthetics ("spell-damage" selector) ---
+    const result = resolveFromSynthetics(actor);
+    if (result.bonus > 0) {
+      log("getSpellDamageBonus: resolved from synthetics", result);
+      return result;
     }
 
-    // Detect feats that grant spell damage bonuses but whose value we can't
-    // programmatically extract — signal this via debug log so the user knows
-    // to use the manual input.
-    const bonusFeats = ["dangerous-sorcery", "sorcerous-potency"];
-    for (const item of actor.items) {
-      const slug = (item.slug ?? item.system?.slug ?? "").toLowerCase();
-      if (bonusFeats.includes(slug)) {
-        log(
-          `getSpellDamageBonus: detected feat "${item.name}" but cannot auto-resolve its value. Use the manual flat-bonus field in the dialog.`,
-        );
-        return 0;
-      }
+    // --- Approach 2: Rule-element scan on actor items ---
+    const ruleResult = resolveFromRuleElements(actor, rank);
+    if (ruleResult.bonus > 0) {
+      log("getSpellDamageBonus: resolved from item rule elements", ruleResult);
+      return ruleResult;
     }
+
+    log("getSpellDamageBonus: no spell-damage bonus found for actor", actorId);
   } catch (e) {
     log("getSpellDamageBonus: error resolving bonus", e);
   }
-  return 0;
+  return empty;
+}
+
+/**
+ * Resolve modifiers from actor.synthetics.modifiers["spell-damage"].
+ * Handles both pre-resolved Modifier objects and deferred () => Modifier functions.
+ */
+function resolveFromSynthetics(actor) {
+  const deferredMods = actor.synthetics?.modifiers?.["spell-damage"];
+  if (!Array.isArray(deferredMods) || deferredMods.length === 0) {
+    return { bonus: 0, sources: [] };
+  }
+
+  const bestByType = {};   // type → { label, value }
+  let untypedSum = 0;
+  const untypedSources = [];
+
+  for (const entry of deferredMods) {
+    let mod;
+    try {
+      mod = typeof entry === "function" ? entry() : entry;
+    } catch { continue; }
+    if (!mod) continue;
+    if (mod.ignored || mod.suppressed) continue;
+
+    // PF2e Modifier stores its value in .modifier (resolved) or .value
+    const val = typeof mod.modifier === "number" ? mod.modifier
+              : typeof mod.value === "number"    ? mod.value
+              : null;
+    if (val == null || val <= 0) continue;
+
+    const type = (mod.type ?? "").toLowerCase();
+    if (!BONUS_TYPES.has(type)) continue;
+
+    const label = mod.label ?? mod.slug ?? "modifier";
+
+    if (type === "untyped" || type === "") {
+      untypedSum += val;
+      untypedSources.push({ label, type: "untyped", value: val });
+    } else {
+      // Same-type bonuses: keep only the highest
+      if (!bestByType[type] || val > bestByType[type].value) {
+        bestByType[type] = { label, type, value: val };
+      }
+    }
+  }
+
+  let bonus = untypedSum;
+  const sources = [...untypedSources];
+  for (const entry of Object.values(bestByType)) {
+    bonus += entry.value;
+    sources.push(entry);
+  }
+  return { bonus, sources };
+}
+
+/**
+ * Fallback: scan actor items for FlatModifier rule elements targeting
+ * "spell-damage".  Tries to resolve simple value expressions like
+ * "@spell.rank" using the known cast rank.
+ */
+function resolveFromRuleElements(actor, rank) {
+  const bestByType = {};
+  let untypedSum = 0;
+  const untypedSources = [];
+
+  for (const item of actor.items) {
+    // Only check feat / feature / effect items
+    const itemType = item.type ?? "";
+    const isRelevant = (typeof item.isOfType === "function")
+      ? item.isOfType("feat", "feature", "effect")
+      : ["feat", "feature", "effect"].includes(itemType);
+    if (!isRelevant) continue;
+
+    const rules = item.system?.rules ?? [];
+    for (const rule of rules) {
+      if (rule.key !== "FlatModifier") continue;
+      if (rule.selector !== "spell-damage") continue;
+
+      const val = resolveRuleValue(rule.value, rank);
+      if (val == null || val <= 0) continue;
+
+      const type = (rule.type ?? "untyped").toLowerCase();
+      if (!BONUS_TYPES.has(type)) continue;
+
+      const label = item.name ?? rule.label ?? "rule element";
+
+      if (type === "untyped" || type === "") {
+        untypedSum += val;
+        untypedSources.push({ label, type: "untyped", value: val });
+      } else {
+        if (!bestByType[type] || val > bestByType[type].value) {
+          bestByType[type] = { label, type, value: val };
+        }
+      }
+    }
+  }
+
+  let bonus = untypedSum;
+  const sources = [...untypedSources];
+  for (const entry of Object.values(bestByType)) {
+    bonus += entry.value;
+    sources.push(entry);
+  }
+  return { bonus, sources };
+}
+
+/** Resolve a rule-element value to a number, substituting known roll data. */
+function resolveRuleValue(val, rank) {
+  if (typeof val === "number") return val;
+  if (typeof val === "string") {
+    // Common PF2e roll-data references for spell rank
+    if (val === "@spell.rank" || val === "@item.rank" || val === "@spell.level") {
+      return rank;
+    }
+    const parsed = Number(val);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (typeof val === "object" && val !== null) {
+    // Bracket notation: { value: N } or nested
+    if (typeof val.value === "number") return val.value;
+  }
+  return null;
 }

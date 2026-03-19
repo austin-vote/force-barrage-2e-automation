@@ -36,7 +36,7 @@ Go to **Settings → Manage Modules** and check **Force Barrage Automation**.
 1. Target one or more enemy tokens via Foundry's targeting tool (**T** key by default).
 2. Cast Force Barrage from a character sheet, wand, scroll, or staff.
 3. The module detects the cast and opens the Force Barrage dialog automatically.
-4. Pick actions (1/2/3) and confirm the spell rank.
+4. Check the shard count (displayed prominently). Adjust actions or rank if needed.
 5. If multiple targets, assign shards to each — the total must match.
 6. Click **Roll**.
 7. Apply damage from the chat card using PF2e's native buttons.
@@ -65,7 +65,7 @@ shards = actions × (1 + floor((rank − 1) / 2))
 
 **Multi-target:** Shards are split freely across targets. Each target's shards are combined into one roll — for example, 3 shards to one target rolls `(3d4 + 3)[force]`.
 
-**Flat bonus** (e.g. Dangerous Sorcery): Applied **once per target**, not per shard. A +2 bonus with 3 shards to one target rolls `(3d4 + 5)[force]`. Set via the Advanced section in the dialog.
+**Flat bonus** (e.g. Dangerous Sorcery): Detected automatically from the caster's PF2e data and applied **once per target**, not per shard. A +2 bonus with 3 shards to one target rolls `(3d4 + 5)[force]`. The dialog shows the detected bonus below the shard count.
 
 ---
 
@@ -166,7 +166,7 @@ The formula is `actions × (1 + floor((rank − 1) / 2))`. The dialog shows the 
 ## Known limitations
 
 1. **Rank pre-fill accuracy.** PF2e provides `castRank` / `castLevel` for heightened casts; if those fields are absent (some older consumable formats), the module falls back to `rank` / `level` and logs a warning. The rank is always editable in the dialog.
-2. **Flat bonus auto-detection.** The module reads `actor.synthetics.modifiers["spell-damage"]` for bonus values. If the bonus comes from a feat whose value isn't in synthetics, the dialog pre-fills 0 — use the manual input in the Advanced section.
+2. **Flat bonus auto-detection.** The module resolves flat spell-damage bonuses from PF2e synthetics (deferred modifiers on the `"spell-damage"` selector) and falls back to scanning item rule elements. If a bonus depends on context the module cannot provide (e.g. a conditional that requires an active roll pipeline), it defaults to 0 and logs a debug warning.
 3. **PF2e version sensitivity.** The module reads PF2e-specific data structures. A major system update could change these. If the module stops working after an update, check the GitHub for a fix.
 
 ---

@@ -58,6 +58,8 @@ async function rollForTarget({ target, flatBonus, actions, rank, shards, speaker
   const formula = shardFormula(target.shards, flatBonus);
   const typedFormula = `(${formula})[${FORCE_DAMAGE_TYPE}]`;
 
+  log(`rollForTarget: ${target.name} — ${target.shards} shard(s), flatBonus=${flatBonus}, formula=${typedFormula}`);
+
   try {
     const DamageRoll = getDamageRollClass();
     const roll = new DamageRoll(typedFormula);

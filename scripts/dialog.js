@@ -1,6 +1,6 @@
 import { MODULE_ID } from "./constants.js";
-import { log, warn } from "./debug.js";
-import { totalShards, heightenSteps, shardFormula } from "./math.js";
+import { log } from "./debug.js";
+import { totalShards } from "./math.js";
 import { getSpellDamageBonus } from "./hooks.js";
 import { rollAndSendDamage } from "./damage.js";
 
@@ -18,47 +18,39 @@ export function openForceBarrageDialog({
   tokenId = null,
 } = {}) {
   const targets = getSelectedTargets();
-  const autoBonus = getSpellDamageBonus(actorId);
   const defaultRank = rank ?? 1;
   const hasTargets = targets.length > 0;
+  const rankDetected = rank != null;
 
   log("openForceBarrageDialog", {
     rank,
     actorId,
     tokenId,
     targetCount: targets.length,
-    autoBonus,
+    rankDetected,
   });
 
   const content = `
-    <form class="force-barrage-dialog">
-      <div class="form-group">
-        <label for="fb-actions">Actions</label>
-        <select id="fb-actions" name="actions">
+    <form class="force-barrage-dialog" autocomplete="off">
+      <div style="text-align:center; padding:2px 0 6px;">
+        <span id="fb-shard-count" style="font-size:1.8em; font-weight:bold; color:#3d85c6;">—</span>
+        <div style="font-size:0.8em; color:#888; margin-top:-2px;">shards</div>
+        <div id="fb-bonus-note" style="font-size:0.75em; color:#888; margin-top:2px;"></div>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+        <label style="font-size:0.85em;">Actions</label>
+        <select name="actions" style="width:55px;">
           <option value="1">1</option>
           <option value="2" selected>2</option>
           <option value="3">3</option>
         </select>
+        <label style="font-size:0.85em; margin-left:auto;">Rank</label>
+        <input type="number" name="rank" value="${defaultRank}" min="1" max="10" step="1"
+               style="width:50px; text-align:center;${rankDetected ? " color:#888;" : ""}" />
       </div>
-      <div class="form-group">
-        <label for="fb-rank">Rank</label>
-        <input id="fb-rank" type="number" name="rank" value="${defaultRank}" min="1" max="10" step="1" />
-      </div>
-      <div id="fb-shard-summary" style="text-align:center; margin:8px 0;">
-        <span id="fb-shard-count" style="font-size:1.4em; font-weight:bold;">—</span>
-        <br><span id="fb-shard-detail" class="notes" style="color:#666;">—</span>
-      </div>
-      <details class="fb-advanced" style="margin-bottom:8px;">
-        <summary style="cursor:pointer; font-size:0.9em; color:#666;">Advanced</summary>
-        <div class="form-group" style="margin-top:4px;">
-          <label for="fb-flat-bonus">Flat Bonus per Target</label>
-          <input id="fb-flat-bonus" type="number" name="flatBonus" value="${autoBonus}" min="0" step="1" />
-          <p class="notes">Added once per target (e.g. Dangerous Sorcery).</p>
-        </div>
-      </details>
-      <hr />
+      <hr style="margin:4px 0 8px;" />
       ${buildTargetSection(targets, hasTargets)}
-      <p id="fb-assign-warning" class="notes" style="color:red; display:none;"></p>
+      <p id="fb-assign-warning" class="notes" style="color:#c41e3a; display:none;"></p>
     </form>
   `;
 
@@ -70,13 +62,12 @@ export function openForceBarrageDialog({
         roll: {
           icon: '<i class="fas fa-dice"></i>',
           label: "Roll",
-          callback: () => {}, // handled by manual click below
+          callback: () => {},
         },
       },
       default: "roll",
       render: (html) => {
-        attachLiveUpdate(html, hasTargets);
-        // Override the Roll button to do validation before close
+        attachLiveUpdate(html, hasTargets, actorId);
         html.find('button[data-button="roll"]').off("click").on("click", (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
@@ -85,7 +76,7 @@ export function openForceBarrageDialog({
       },
       close: () => log("Force Barrage dialog closed."),
     },
-    { width: 380, classes: ["force-barrage", "dialog"] },
+    { width: 340, classes: ["force-barrage", "dialog"] },
   );
 
   dlg.render(true);
@@ -95,44 +86,39 @@ export function openForceBarrageDialog({
 
 function buildTargetSection(targets, hasTargets) {
   if (!hasTargets) {
-    return `
-      <p class="notes" style="color:#888; font-style:italic; margin:4px 0;">
-        <i class="fas fa-info-circle"></i>
-        No targets selected. Damage will not be auto-applied.
-      </p>`;
+    return `<p class="notes" style="color:#999; font-size:0.85em; margin:2px 0;">
+        No targets — roll will have no apply buttons.</p>`;
   }
 
   if (targets.length === 1) {
     const t = targets[0];
     return `
-      <div class="form-group fb-target-row"
+      <div class="fb-target-row" style="display:flex; align-items:center; gap:6px; margin:2px 0;"
            data-target-index="0"
            data-target-id="${escapeHtml(String(t.id))}"
            data-actor-uuid="${escapeHtml(t.actorUuid ?? "")}"
            data-token-uuid="${escapeHtml(t.tokenUuid ?? "")}">
-        <label style="flex:1;"><i class="fas fa-crosshairs" style="margin-right:4px;"></i>${escapeHtml(t.name)}</label>
-        <input type="number" name="shards_0" class="fb-shard-input" value="0" min="0" step="1" style="width:60px;" readonly />
+        <i class="fas fa-crosshairs" style="color:#888;"></i>
+        <span style="flex:1;">${escapeHtml(t.name)}</span>
+        <input type="number" name="shards_0" class="fb-shard-input" value="0" min="0" step="1" style="width:50px; text-align:center;" readonly tabindex="-1" />
       </div>`;
   }
 
-  // Multi-target
   const rows = targets
     .map(
       (t, i) =>
-        `<div class="form-group fb-target-row"
+        `<div class="fb-target-row" style="display:flex; align-items:center; gap:6px; margin:1px 0;"
               data-target-index="${i}"
               data-target-id="${escapeHtml(String(t.id))}"
               data-actor-uuid="${escapeHtml(t.actorUuid ?? "")}"
               data-token-uuid="${escapeHtml(t.tokenUuid ?? "")}">
-          <label style="flex:1;">${escapeHtml(t.name)}</label>
-          <input type="number" name="shards_${i}" class="fb-shard-input" value="0" min="0" step="1" style="width:60px;" />
+          <span style="flex:1; font-size:0.9em;">${escapeHtml(t.name)}</span>
+          <input type="number" name="shards_${i}" class="fb-shard-input" value="0" min="0" step="1" style="width:50px; text-align:center;" />
         </div>`,
     )
     .join("");
 
-  return `
-    <p class="notes" style="margin-bottom:4px;">Assign shards to each target.</p>
-    ${rows}`;
+  return `<div style="font-size:0.85em; color:#888; margin-bottom:2px;">Assign shards to targets</div>${rows}`;
 }
 
 /* ---------- target helpers ---------- */
@@ -155,11 +141,11 @@ function escapeHtml(str) {
 
 /* ---------- live update ---------- */
 
-function attachLiveUpdate(html, hasTargets) {
+function attachLiveUpdate(html, hasTargets, actorId) {
   const actionsEl = html.find('[name="actions"]');
   const rankEl = html.find('[name="rank"]');
   const countEl = html.find("#fb-shard-count");
-  const detailEl = html.find("#fb-shard-detail");
+  const bonusNoteEl = html.find("#fb-bonus-note");
   const shardInputs = html.find(".fb-shard-input");
   const isSingleTarget = hasTargets && shardInputs.length === 1;
 
@@ -168,10 +154,17 @@ function attachLiveUpdate(html, hasTargets) {
     const rank = parseInt(rankEl.val(), 10) || 1;
     const shards = totalShards(actions, rank);
 
-    countEl.text(`Total Shards: ${shards}`);
-    detailEl.text(`${actions} action${actions !== 1 ? "s" : ""} at rank ${rank}`);
+    countEl.text(shards);
 
-    // Auto-fill single target or no targets
+    // Recalculate bonus from actor data whenever rank changes
+    const { bonus, sources } = getSpellDamageBonus(actorId, rank);
+    if (bonus > 0 && sources.length > 0) {
+      const detail = sources.map((s) => `+${s.value} ${s.label}`).join(", ");
+      bonusNoteEl.text(detail).show();
+    } else {
+      bonusNoteEl.text("").hide();
+    }
+
     if (isSingleTarget) {
       shardInputs.eq(0).val(shards);
     }
@@ -217,7 +210,7 @@ function validateAssignment(html, expectedShards) {
 async function onSubmit(html, { actorId, tokenId, dlg }) {
   const actions = parseInt(html.find('[name="actions"]').val(), 10) || 2;
   const rank = parseInt(html.find('[name="rank"]').val(), 10) || 1;
-  const flatBonus = parseInt(html.find('[name="flatBonus"]').val(), 10) || 0;
+  const { bonus: flatBonus } = getSpellDamageBonus(actorId, rank);
   const shards = totalShards(actions, rank);
   const shardInputs = html.find(".fb-shard-input");
 
@@ -238,7 +231,7 @@ async function onSubmit(html, { actorId, tokenId, dlg }) {
     const targetId = String(row.data("target-id") ?? "");
     const actorUuid = row.data("actor-uuid") || null;
     const tokenUuid = row.data("token-uuid") || null;
-    const name = row.find("label").text().trim();
+    const name = row.find("span").first().text().trim();
     const assigned = parseInt(row.find(".fb-shard-input").val(), 10) || 0;
     if (assigned > 0) {
       assignments.push({ targetId, actorUuid, tokenUuid, name, shards: assigned });
