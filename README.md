@@ -31,8 +31,6 @@ Go to **Settings → Manage Modules** and check **Force Barrage Automation**.
 
 ## How to use it
 
-### Auto mode
-
 1. Target one or more enemy tokens via Foundry's targeting tool (**T** key by default).
 2. Cast Force Barrage from a character sheet, wand, scroll, or staff.
 3. The module detects the cast and opens the Force Barrage dialog automatically.
@@ -41,9 +39,7 @@ Go to **Settings → Manage Modules** and check **Force Barrage Automation**.
 6. Click **Roll**.
 7. Apply damage from the chat card using PF2e's native buttons.
 
-### Manual macro mode
-
-Run the provided macro (see [Macro](#macro) below) at any time. Useful when Auto-Intercept is disabled or when casting from a custom item.
+You can also run the provided macro (see [Macro](#macro) below) at any time — useful when casting from a custom item.
 
 ---
 
@@ -110,7 +106,6 @@ All settings are under **Settings → Module Settings → Force Barrage Automati
 | Setting | Default | What it does |
 |---|---|---|
 | **Debug Logging** | Off | Turns on detailed console output (F12) for troubleshooting. |
-| **Auto-Intercept Casts** | On | Automatically opens the dialog when a Force Barrage cast is detected in chat. Disable to use the manual macro only. |
 
 ---
 
@@ -148,9 +143,8 @@ The dialog opens with the caster pre-filled and current targets loaded. Also sav
 ### The dialog never opens automatically
 
 1. **Is the module enabled?** Check Settings → Manage Modules.
-2. **Is Auto-Intercept on?** Check module settings.
-3. **Does the slug match?** Enable Debug Logging, then cast the spell and check the browser console (F12) — it will show which layer was checked and what slug/name was found.
-4. **Are you the GM or the spell's caster?** The module only intercepts messages authored by the current user or the GM — it won't fire for a different player's cast on your client.
+2. **Does the slug match?** Enable Debug Logging, then cast the spell and check the browser console (F12) — it will show which layer was checked and what slug/name was found.
+3. **Are you the GM or the spell's caster?** The module only intercepts messages authored by the current user or the GM — it won't fire for a different player's cast on your client.
 
 To inspect slugs manually with a token selected:
 ```js
