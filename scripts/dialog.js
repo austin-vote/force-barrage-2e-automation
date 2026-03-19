@@ -23,6 +23,7 @@ export function openForceBarrageDialog({ rank = null, actorId = null, tokenId = 
   log("openForceBarrageDialog", { rank, actorId, tokenId, targetCount: targets.length, autoBonus });
 
   const targetRows = buildTargetInputRows(targets);
+  const isUntargeted = targets.length === 1 && targets[0].untargeted === true;
 
   const content = `
     <form class="force-barrage-dialog">
@@ -50,8 +51,14 @@ export function openForceBarrageDialog({ rank = null, actorId = null, tokenId = 
       </div>
       <hr />
       <h3>Target Assignment</h3>
-      <p class="notes">Assign shards to each target. Total must equal calculated shards.<br/>
-      If no tokens are targeted, all shards go to a single group.</p>
+      ${isUntargeted
+        ? `<p class="notification warning" style="margin:4px 0 8px; padding:4px 8px;">
+             <i class="fas fa-exclamation-triangle"></i>
+             No tokens targeted — <strong>Roll &amp; Apply is disabled</strong>.<br/>
+             Target tokens before opening this dialog, or use Roll Only.
+           </p>`
+        : `<p class="notes">Assign shards to each target. Total must equal calculated shards.</p>`
+      }
       <div id="fb-target-rows">
         ${targetRows}
       </div>
@@ -75,6 +82,11 @@ export function openForceBarrageDialog({ rank = null, actorId = null, tokenId = 
         attachLiveUpdate(html);
         html.find("#fb-btn-roll").on("click", () => onSubmit(html, { apply: false, actorId, tokenId, dlg }));
         html.find("#fb-btn-apply").on("click", () => onSubmit(html, { apply: true, actorId, tokenId, dlg }));
+        if (isUntargeted) {
+          html.find("#fb-btn-apply")
+            .prop("disabled", true)
+            .attr("title", "Target at least one token to enable Roll & Apply");
+        }
       },
       close: () => log("Force Barrage dialog closed."),
     },
@@ -94,9 +106,11 @@ function getSelectedTargets() {
       name: t.name ?? t.document?.name ?? "Unknown",
       actorUuid: t.actor?.uuid ?? null,
       tokenUuid: t.document?.uuid ?? null,
+      untargeted: false,
     }));
   }
-  return [{ id: "all", name: "All Targets", actorUuid: null, tokenUuid: null }];
+  // No tokens targeted — Roll & Apply will be blocked to prevent unintended HP changes.
+  return [{ id: "untargeted", name: "Untargeted Roll", actorUuid: null, tokenUuid: null, untargeted: true }];
 }
 
 /** Minimal HTML entity escaping for target names rendered inside the dialog. */
@@ -108,13 +122,16 @@ function escapeHtml(str) {
 
 function buildTargetInputRows(targets) {
   return targets
-    .map(
-      (t, i) =>
-        `<div class="form-group fb-target-row" data-target-index="${i}" data-target-id="${escapeHtml(String(t.id))}" data-actor-uuid="${escapeHtml(t.actorUuid ?? "")}" data-token-uuid="${escapeHtml(t.tokenUuid ?? "")}">
+    .map((t, i) => {
+      const isUntargeted = t.untargeted === true;
+      const inputAttrs = isUntargeted
+        ? `readonly style="width:60px; background:#eee; cursor:not-allowed;"`
+        : `style="width:60px;"`;
+      return `<div class="form-group fb-target-row" data-target-index="${i}" data-target-id="${escapeHtml(String(t.id))}" data-actor-uuid="${escapeHtml(t.actorUuid ?? "")}" data-token-uuid="${escapeHtml(t.tokenUuid ?? "")}" data-untargeted="${isUntargeted}">
           <label>${escapeHtml(t.name)}</label>
-          <input type="number" name="shards_${i}" class="fb-shard-input" value="0" min="0" step="1" style="width:60px;" />
-        </div>`,
-    )
+          <input type="number" name="shards_${i}" class="fb-shard-input" value="0" min="0" step="1" ${inputAttrs} />
+        </div>`;
+    })
     .join("");
 }
 
@@ -178,6 +195,15 @@ async function onSubmit(html, { apply, actorId, tokenId, dlg }) {
   const flatBonus = parseInt(html.find('[name="flatBonus"]').val(), 10) || 0;
   const shards = totalShards(actions, rank);
 
+  // Safety: if Roll & Apply was somehow invoked with no real targets (e.g. a
+  // macro bypassing the disabled button), silently fall back to Roll Only so
+  // HP is never mutated without a resolved token.
+  const hasRealTargets = html.find(".fb-target-row[data-untargeted='true']").length === 0;
+  const shouldApply = apply && hasRealTargets;
+  if (apply && !hasRealTargets) {
+    warn("Force Barrage: Roll & Apply requested with no targets — rolling without applying.");
+  }
+
   // Validate before closing — dialog stays open on failure
   if (!validateAssignment(html, shards)) {
     ui.notifications.error("Force Barrage: Shard assignment does not match total. Fix it and try again.");
@@ -203,7 +229,7 @@ async function onSubmit(html, { apply, actorId, tokenId, dlg }) {
     return;
   }
 
-  log("Force Barrage submitted", { actions, rank, flatBonus, shards, assignments, apply });
+  log("Force Barrage submitted", { actions, rank, flatBonus, shards, assignments, apply: shouldApply });
 
   // Close dialog only after validation passes
   dlg.close();
@@ -214,7 +240,7 @@ async function onSubmit(html, { apply, actorId, tokenId, dlg }) {
     flatBonus,
     shards,
     assignments,
-    apply,
+    apply: shouldApply,
     actorId,
     tokenId,
   });

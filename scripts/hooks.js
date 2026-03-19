@@ -5,10 +5,13 @@ import {
 import { log } from "./debug.js";
 
 /**
- * Exact spell names (lowercased) used for name-based matching.
- * Only matches if the origin/item name starts with one of these.
+ * Canonical spell names used for name-based matching.
+ * Must be in normalized form: lowercase, hyphens replaced by spaces.
  */
 const NAME_PATTERNS = ["force barrage", "magic missile"];
+
+/** Set for O(1) exact-match lookup against normalized names. */
+const VALID_NAMES = new Set(NAME_PATTERNS);
 
 /**
  * Returns the user-overridden slug list, or the built-in defaults.
@@ -80,10 +83,15 @@ export function detectForceBarrage(message) {
   }
 
   // --- Layer 3: content fallback (rendered HTML) ---
-  const content = (message.content ?? "").toLowerCase();
-  if (NAME_PATTERNS.some((p) => content.includes(p))) {
-    log("detectForceBarrage: MATCHED layer 3 (message content fallback, rank unknown)");
-    return { detected: true, rank: null, actorId: speakerActorId, tokenId: speakerTokenId };
+  // Guard: only fire when an actor speaker is present.  Without this, ambient
+  // GM text that merely mentions the spell name (e.g. flavor pasted into chat)
+  // would incorrectly trigger the dialog.
+  if (speakerActorId) {
+    const normContent = normalizeName(message.content ?? "");
+    if (NAME_PATTERNS.some((p) => normContent.includes(p))) {
+      log("detectForceBarrage: MATCHED layer 3 (content fallback, rank unknown)");
+      return { detected: true, rank: null, actorId: speakerActorId, tokenId: speakerTokenId };
+    }
   }
 
   log("detectForceBarrage: no match on any layer", {
@@ -101,9 +109,35 @@ function matchesSlug(value, slugs) {
   return value.length > 0 && slugs.includes(value);
 }
 
-/** Name must start with a known pattern (avoids matching "Counter Force Barrage" etc.). */
-function matchesName(value) {
-  return NAME_PATTERNS.some((p) => value.startsWith(p));
+/**
+ * Normalize a name for comparison: lowercase, collapse hyphens/apostrophes
+ * to spaces, then trim and collapse runs of whitespace.
+ */
+function normalizeName(str) {
+  return (str ?? "")
+    .toLowerCase()
+    .replace(/[-']/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Match a name string against known Force Barrage spell names.
+ * 1. Exact normalized match — highest confidence.
+ * 2. Prefix match — handles parenthetical suffixes like
+ *    "Force Barrage (Heightened)" without matching mid-string occurrences
+ *    like "Counter Force Barrage".
+ */
+function matchesName(rawValue) {
+  if (!rawValue) return false;
+  const norm = normalizeName(rawValue);
+  if (!norm) return false;
+  // Exact match
+  if (VALID_NAMES.has(norm)) return true;
+  // Prefix match — must be followed by a space, "(", or end-of-string
+  return NAME_PATTERNS.some(
+    (p) => norm === p || norm.startsWith(p + " ") || norm.startsWith(p + "("),
+  );
 }
 
 /**

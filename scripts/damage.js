@@ -105,7 +105,17 @@ async function rollForTarget({ target, flatBonus, rank, apply, speaker }) {
       return;
     }
 
-    const flavor = buildFlavor(target);
+    // For Roll Only: include pf2e.target so PF2e renders its native apply-damage
+    // button in the chat card, letting the GM click to apply after inspecting the roll.
+    // For Roll & Apply: omit pf2e.target so that button does NOT appear — the damage
+    // is already being applied programmatically and showing the button risks a
+    // second, duplicate application.
+    const pf2eTarget =
+      !apply && target.tokenUuid
+        ? { actor: target.actorUuid ?? null, token: target.tokenUuid }
+        : undefined;
+
+    const flavor = buildFlavor(target, apply);
 
     await roll.toMessage({
       speaker,
@@ -117,22 +127,22 @@ async function rollForTarget({ target, flatBonus, rank, apply, speaker }) {
             sourceType: "spell",
             options: ["item:force-barrage"],
           },
-          target: {
-            actor: target.actorUuid ?? null,
-            token: target.tokenUuid ?? null,
-          },
+          ...(pf2eTarget ? { target: pf2eTarget } : {}),
         },
         [MODULE_ID]: {
           isForceBarrage: true,
           shards: target.shards,
+          applied: apply,
         },
       },
     });
 
-    log(`Rolled ${typedFormula} = ${total} for ${target.name}`);
+    log(`Rolled ${typedFormula} = ${total} for ${target.name} (${apply ? "applying" : "roll only"})`);
 
     if (apply && target.tokenUuid) {
       await maybeApplyDamage(target, total);
+    } else if (apply && !target.tokenUuid) {
+      warn(`Roll & Apply: no token UUID for "${target.name}" — damage NOT applied. Use Roll Only and apply via the chat card.`);
     }
   } catch (e) {
     warn("Failed to roll damage for", target.name, e);
@@ -184,25 +194,23 @@ async function applyDamage(target, total) {
       return;
     }
 
-    // PF2e actors expose applyDamage() for IWR-aware HP reduction
-    if (typeof actor.applyDamage === "function") {
-      await actor.applyDamage({
-        damage: total,
-        token: tokenDoc ?? undefined,
-        type: FORCE_DAMAGE_TYPE,
-      });
-      log(`Applied ${total} ${FORCE_DAMAGE_TYPE} damage to ${target.name} via applyDamage`);
-    } else {
-      // Fallback: direct HP adjustment (no IWR processing)
-      const hp = actor.system?.attributes?.hp;
-      if (hp && typeof hp.value === "number") {
-        const newHp = Math.max(0, hp.value - total);
-        await actor.update({ "system.attributes.hp.value": newHp });
-        log(`Fallback HP update: ${target.name} ${hp.value} → ${newHp}`);
-      } else {
-        warn(`Cannot apply damage to ${target.name}: no applyDamage method and no HP attribute found.`);
-      }
+    // PF2e's applyDamage() applies IWR (immunities, weaknesses, resistances).
+    // We do NOT fall back to direct HP mutation — that bypasses IWR, skips
+    // automation hooks, and can leave the sheet in an inconsistent state.
+    if (typeof actor.applyDamage !== "function") {
+      warn(
+        `actor.applyDamage unavailable for "${target.name}" (PF2e version mismatch?). ` +
+          `Damage was NOT applied — use the chat card to apply manually.`,
+      );
+      return;
     }
+
+    await actor.applyDamage({
+      damage: total,
+      token: tokenDoc ?? undefined,
+      type: FORCE_DAMAGE_TYPE,
+    });
+    log(`Applied ${total} ${FORCE_DAMAGE_TYPE} damage to ${target.name} via applyDamage`);
   } catch (e) {
     warn("applyDamage error:", e);
   }
@@ -210,10 +218,13 @@ async function applyDamage(target, total) {
 
 /* ---------- helpers ---------- */
 
-function buildFlavor(target) {
+function buildFlavor(target, applied = false) {
+  const badge = applied
+    ? ` <em style="color:#888; font-weight:normal;">(applied)</em>`
+    : ``;
   return [
     `<div style="border-left: 3px solid #3d85c6; padding-left: 8px; margin-bottom: 4px;">`,
-    `  <strong style="color: #3d85c6;">Force Barrage</strong><br>`,
+    `  <strong style="color: #3d85c6;">Force Barrage</strong>${badge}<br>`,
     `  <span>${target.shards} shard(s) → <strong>${sanitize(target.name)}</strong></span>`,
     `</div>`,
   ].join("\n");
