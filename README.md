@@ -55,22 +55,6 @@ When Force Barrage is cast, this module opens a dialog to assign shards to targe
 
 ## Shard math
 
-Each shard deals **1d4 + 1 force** damage. The number of shards scales with action cost and spell rank:
-
-```
-shards = actions × (1 + floor((rank − 1) / 2))
-```
-
-| Rank | 1 Action | 2 Actions | 3 Actions |
-|------|----------|-----------|-----------|
-| 1 | 1 | 2 | 3 |
-| 3 | 2 | 4 | 6 |
-| 5 | 3 | 6 | 9 |
-| 7 | 4 | 8 | 12 |
-| 9 | 5 | 10 | 15 |
-
-**Multi-target:** Shards are split freely across targets. Each target's shards are combined into one roll — for example, 3 shards to one target rolls `(3d4 + 3)[force]`.
-
 **Flat bonus** (e.g. Dangerous Sorcery): Detected automatically from the caster's PF2e data and applied **once per target**, not per shard. A +2 bonus with 3 shards to one target rolls `(3d4 + 5)[force]`. The dialog shows the detected bonus below the shard count.
 
 ---
