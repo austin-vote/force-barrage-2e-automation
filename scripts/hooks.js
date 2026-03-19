@@ -1,7 +1,4 @@
-import {
-  MODULE_ID,
-  FORCE_BARRAGE_SLUGS,
-} from "./constants.js";
+import { MODULE_ID, FORCE_BARRAGE_SLUGS } from "./constants.js";
 import { log } from "./debug.js";
 
 /**
@@ -42,7 +39,12 @@ export function getSpellSlugs() {
  * @returns {{ detected: boolean, rank: number|null, actorId: string|null, tokenId: string|null }}
  */
 export function detectForceBarrage(message) {
-  const none = Object.freeze({ detected: false, rank: null, actorId: null, tokenId: null });
+  const none = Object.freeze({
+    detected: false,
+    rank: null,
+    actorId: null,
+    tokenId: null,
+  });
   if (!message) return none;
 
   const slugs = getSpellSlugs();
@@ -58,16 +60,31 @@ export function detectForceBarrage(message) {
     if (matchesSlug(originSlug, slugs) || matchesName(originName)) {
       const rank = extractCastRank(origin, "flags.pf2e.origin");
       log("detectForceBarrage: MATCHED layer 1 (flags.pf2e.origin)", {
-        slug: originSlug, name: originName, rank,
-        rawFields: { castRank: origin.castRank, castLevel: origin.castLevel, type: origin.type },
+        slug: originSlug,
+        name: originName,
+        rank,
+        rawFields: {
+          castRank: origin.castRank,
+          castLevel: origin.castLevel,
+          type: origin.type,
+        },
       });
-      return { detected: true, rank, actorId: speakerActorId, tokenId: speakerTokenId };
+      return {
+        detected: true,
+        rank,
+        actorId: speakerActorId,
+        tokenId: speakerTokenId,
+      };
     }
-    log("detectForceBarrage: layer 1 checked, no match", { slug: originSlug, name: originName });
+    log("detectForceBarrage: layer 1 checked, no match", {
+      slug: originSlug,
+      name: originName,
+    });
   }
 
   // --- Layer 2: flags.pf2e.casting or flags.pf2e.item (older PF2e / some consumables) ---
-  const castingOrItem = message.flags?.pf2e?.casting ?? message.flags?.pf2e?.item;
+  const castingOrItem =
+    message.flags?.pf2e?.casting ?? message.flags?.pf2e?.item;
   if (castingOrItem && typeof castingOrItem === "object") {
     const itemSlug = (castingOrItem.slug ?? "").toLowerCase();
     const itemName = (castingOrItem.name ?? "").toLowerCase();
@@ -75,11 +92,21 @@ export function detectForceBarrage(message) {
     if (matchesSlug(itemSlug, slugs) || matchesName(itemName)) {
       const rank = extractCastRank(castingOrItem, "flags.pf2e.casting/item");
       log("detectForceBarrage: MATCHED layer 2 (flags.pf2e.casting/item)", {
-        slug: itemSlug, name: itemName, rank,
+        slug: itemSlug,
+        name: itemName,
+        rank,
       });
-      return { detected: true, rank, actorId: speakerActorId, tokenId: speakerTokenId };
+      return {
+        detected: true,
+        rank,
+        actorId: speakerActorId,
+        tokenId: speakerTokenId,
+      };
     }
-    log("detectForceBarrage: layer 2 checked, no match", { slug: itemSlug, name: itemName });
+    log("detectForceBarrage: layer 2 checked, no match", {
+      slug: itemSlug,
+      name: itemName,
+    });
   }
 
   // --- Layer 3: content fallback (rendered HTML) ---
@@ -89,8 +116,15 @@ export function detectForceBarrage(message) {
   if (speakerActorId) {
     const normContent = normalizeName(message.content ?? "");
     if (NAME_PATTERNS.some((p) => normContent.includes(p))) {
-      log("detectForceBarrage: MATCHED layer 3 (content fallback, rank unknown)");
-      return { detected: true, rank: null, actorId: speakerActorId, tokenId: speakerTokenId };
+      log(
+        "detectForceBarrage: MATCHED layer 3 (content fallback, rank unknown)",
+      );
+      return {
+        detected: true,
+        rank: null,
+        actorId: speakerActorId,
+        tokenId: speakerTokenId,
+      };
     }
   }
 
@@ -165,7 +199,9 @@ function extractCastRank(obj, source) {
   for (const field of ["rank", "level"]) {
     const v = obj[field];
     if (typeof v === "number" && v >= 1) {
-      log(`extractCastRank: WARNING using base field ${source}.${field} = ${v} (castRank/castLevel not found — this may be the base rank, not the heightened rank)`);
+      log(
+        `extractCastRank: WARNING using base field ${source}.${field} = ${v} (castRank/castLevel not found — this may be the base rank, not the heightened rank)`,
+      );
       return v;
     }
   }
@@ -203,9 +239,16 @@ export function getSpellDamageBonus(actorId) {
         for (const mod of mods) {
           if (typeof mod.value !== "number" || mod.value <= 0) continue;
           const type = mod.type ?? "";
-          if (type === "status" || type === "circumstance" || type === "item" || type === "untyped") {
+          if (
+            type === "status" ||
+            type === "circumstance" ||
+            type === "item" ||
+            type === "untyped"
+          ) {
             bonus += mod.value;
-            log(`getSpellDamageBonus: found ${mod.label ?? mod.slug ?? "modifier"} (${type}) = +${mod.value}`);
+            log(
+              `getSpellDamageBonus: found ${mod.label ?? mod.slug ?? "modifier"} (${type}) = +${mod.value}`,
+            );
           }
         }
         if (bonus > 0) return bonus;
@@ -219,7 +262,9 @@ export function getSpellDamageBonus(actorId) {
     for (const item of actor.items) {
       const slug = (item.slug ?? item.system?.slug ?? "").toLowerCase();
       if (bonusFeats.includes(slug)) {
-        log(`getSpellDamageBonus: detected feat "${item.name}" but cannot auto-resolve its value. Use the manual flat-bonus field in the dialog.`);
+        log(
+          `getSpellDamageBonus: detected feat "${item.name}" but cannot auto-resolve its value. Use the manual flat-bonus field in the dialog.`,
+        );
         return 0;
       }
     }

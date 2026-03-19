@@ -4,7 +4,7 @@ export const MODULE_ID = "force-barrage";
 export const FORCE_BARRAGE_SLUGS = [
   "force-barrage",
   "spell-force-barrage",
-  "magic-missile",          // legacy / pre-remaster name
+  "magic-missile", // legacy / pre-remaster name
   "spell-magic-missile",
 ];
 

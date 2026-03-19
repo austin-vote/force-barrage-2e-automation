@@ -1,7 +1,4 @@
-import {
-  MODULE_ID,
-  FORCE_DAMAGE_TYPE,
-} from "./constants.js";
+import { MODULE_ID, FORCE_DAMAGE_TYPE } from "./constants.js";
 import { log, warn } from "./debug.js";
 import { shardFormula } from "./math.js";
 
@@ -49,7 +46,14 @@ export async function rollAndSendDamage({
   const speaker = buildSpeaker(actorId, tokenId);
 
   // Post a summary card first
-  await postSummaryCard({ actions, rank, shards, flatBonus, assignments, speaker });
+  await postSummaryCard({
+    actions,
+    rank,
+    shards,
+    flatBonus,
+    assignments,
+    speaker,
+  });
 
   // Roll per target
   for (const target of assignments) {
@@ -60,7 +64,14 @@ export async function rollAndSendDamage({
 /**
  * Post a summary-only chat message describing the cast.
  */
-async function postSummaryCard({ actions, rank, shards, flatBonus, assignments, speaker }) {
+async function postSummaryCard({
+  actions,
+  rank,
+  shards,
+  flatBonus,
+  assignments,
+  speaker,
+}) {
   const distLines = assignments
     .map((a) => {
       const formula = shardFormula(a.shards, flatBonus);
@@ -137,12 +148,16 @@ async function rollForTarget({ target, flatBonus, rank, apply, speaker }) {
       },
     });
 
-    log(`Rolled ${typedFormula} = ${total} for ${target.name} (${apply ? "applying" : "roll only"})`);
+    log(
+      `Rolled ${typedFormula} = ${total} for ${target.name} (${apply ? "applying" : "roll only"})`,
+    );
 
     if (apply && target.tokenUuid) {
       await maybeApplyDamage(target, total);
     } else if (apply && !target.tokenUuid) {
-      warn(`Roll & Apply: no token UUID for "${target.name}" — damage NOT applied. Use Roll Only and apply via the chat card.`);
+      warn(
+        `Roll & Apply: no token UUID for "${target.name}" — damage NOT applied. Use Roll Only and apply via the chat card.`,
+      );
     }
   } catch (e) {
     warn("Failed to roll damage for", target.name, e);
@@ -164,8 +179,16 @@ async function maybeApplyDamage(target, total) {
         title: "Confirm Damage Application",
         content: `<p>Apply <strong>${total}</strong> ${FORCE_DAMAGE_TYPE} damage to <strong>${sanitize(target.name)}</strong>?</p>`,
         buttons: {
-          yes: { icon: '<i class="fas fa-check"></i>', label: "Apply", callback: () => resolve(true) },
-          no: { icon: '<i class="fas fa-times"></i>', label: "Cancel", callback: () => resolve(false) },
+          yes: {
+            icon: '<i class="fas fa-check"></i>',
+            label: "Apply",
+            callback: () => resolve(true),
+          },
+          no: {
+            icon: '<i class="fas fa-times"></i>',
+            label: "Cancel",
+            callback: () => resolve(false),
+          },
         },
         default: "yes",
         close: () => resolve(false),
@@ -187,7 +210,9 @@ async function maybeApplyDamage(target, total) {
 async function applyDamage(target, total) {
   try {
     const tokenDoc = target.tokenUuid ? await fromUuid(target.tokenUuid) : null;
-    const actor = tokenDoc?.actor ?? (target.actorUuid ? await fromUuid(target.actorUuid) : null);
+    const actor =
+      tokenDoc?.actor ??
+      (target.actorUuid ? await fromUuid(target.actorUuid) : null);
 
     if (!actor) {
       warn(`Cannot apply damage: no actor resolved for ${target.name}`);
@@ -210,7 +235,9 @@ async function applyDamage(target, total) {
       token: tokenDoc ?? undefined,
       type: FORCE_DAMAGE_TYPE,
     });
-    log(`Applied ${total} ${FORCE_DAMAGE_TYPE} damage to ${target.name} via applyDamage`);
+    log(
+      `Applied ${total} ${FORCE_DAMAGE_TYPE} damage to ${target.name} via applyDamage`,
+    );
   } catch (e) {
     warn("applyDamage error:", e);
   }

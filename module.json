@@ -25,7 +25,5 @@
   ],
   "manifest": "https://raw.githubusercontent.com/austin-vote/force-barrage-2e-automation/main/module.json",
   "download": "https://github.com/austin-vote/force-barrage-2e-automation/archive/refs/heads/main.zip",
-  "esmodules": [
-    "scripts/main.js"
-  ]
+  "esmodules": ["scripts/main.js"]
 }
