@@ -73,7 +73,7 @@ shards = actions × (1 + floor((rank − 1) / 2))
 
 If no tokens are targeted when the dialog opens:
 
-- A small inline note appears: "No targets selected. Damage will not be auto-applied."
+- A small inline note appears: "No targets — roll will have no apply buttons."
 - Rolling still works — you just won't get PF2e's apply-damage buttons on the chat card.
 - The module **never** touches HP directly. All damage application goes through PF2e's native chat card buttons.
 
@@ -96,7 +96,7 @@ No separate summary card. No spam.
 The module watches every incoming chat message and checks three layers in order:
 
 1. **`flags.pf2e.origin`** — most reliable; set by PF2e for spells, wands, scrolls, and staves. Matches by exact slug.
-2. **`flags.pf2e.casting` / `flags.pf2e.item`** — older PF2e format and some consumables. Matches by exact slug.
+2. **`flags.pf2e.casting.embeddedSpell`** — scroll/wand/staff consumable casts embed the full spell object here. Matches by exact slug or normalized name.
 3. **Content fallback** — searches the rendered HTML for known spell names. Only fires when an actor speaker is present (prevents ambient GM chat from triggering the dialog).
 
 Name matching is normalized (case, hyphens, whitespace) and uses exact or prefix matching — not substring — so `"Counter Force Barrage"` will never accidentally trigger the module.
@@ -166,7 +166,7 @@ The formula is `actions × (1 + floor((rank − 1) / 2))`. The dialog shows the 
 ## Known limitations
 
 1. **Rank pre-fill accuracy.** PF2e provides `castRank` / `castLevel` for heightened casts; if those fields are absent (some older consumable formats), the module falls back to `rank` / `level` and logs a warning. The rank is always editable in the dialog.
-2. **Flat bonus auto-detection.** The module resolves flat spell-damage bonuses from PF2e synthetics (deferred modifiers on the `"spell-damage"` selector) and falls back to scanning item rule elements. If a bonus depends on context the module cannot provide (e.g. a conditional that requires an active roll pipeline), it defaults to 0 and logs a debug warning.
+2. **Flat bonus auto-detection.** The module first scans item rule elements for `FlatModifier` rules targeting `"spell-damage"` (best for rank-dependent bonuses like Dangerous Sorcery), then falls back to `actor.synthetics.modifiers["spell-damage"]` for code-injected modifiers. Rule element predicates are not evaluated — conditional bonuses are included regardless. If no bonus resolves, it defaults to 0.
 3. **PF2e version sensitivity.** The module reads PF2e-specific data structures. A major system update could change these. If the module stops working after an update, check the GitHub for a fix.
 
 ---

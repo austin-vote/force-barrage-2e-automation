@@ -47,7 +47,6 @@ export function detectForceBarrage(message) {
   const pf2eFlags = message.flags?.pf2e;
   const origin = pf2eFlags?.origin;
 
-  // Log all rank-related fields on origin for debugging
   if (origin && typeof origin === "object") {
     log("detectForceBarrage: origin dump", {
       type: origin.type,
@@ -236,7 +235,6 @@ function matchesName(rawValue) {
  * level rather than the heightened cast rank.
  */
 function extractCastRank(obj, source) {
-  // Log every rank-related field we can find
   const found = {};
   for (const field of ["castRank", "castLevel", "spellRank", "rank", "level"]) {
     if (obj[field] !== undefined) found[field] = obj[field];
@@ -334,9 +332,6 @@ export function getSpellDamageBonus(actorId, rank = 1) {
   return empty;
 }
 
-// Item types that can carry FlatModifier rule elements for spell-damage.
-// In PF2e: feats (including class features tagged as feats), effects
-// (conditions, temporary buffs), actions (some class abilities), and heritages.
 const BONUS_ITEM_TYPES = new Set(["feat", "feature", "effect", "action", "heritage"]);
 
 /**
@@ -354,7 +349,6 @@ function resolveFromRuleElements(actor, rank) {
   const allCandidates = [];
 
   for (const item of actor.items) {
-    // Only check item types that realistically carry spell-damage bonuses
     const isRelevant = (typeof item.isOfType === "function")
       ? item.isOfType("feat", "feature", "effect", "action", "heritage")
       : BONUS_ITEM_TYPES.has(item.type ?? "");

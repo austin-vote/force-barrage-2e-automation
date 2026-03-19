@@ -159,7 +159,6 @@ function attachLiveUpdate(html, hasTargets, actorId) {
 
     countEl.text(shards);
 
-    // Recalculate bonus from actor data whenever rank changes
     const { bonus, sources } = getSpellDamageBonus(actorId, rank);
     if (bonus > 0 && sources.length > 0) {
       const fromPart = sources.length === 1
@@ -219,7 +218,6 @@ async function onSubmit(html, { actorId, tokenId, dlg }) {
   const shards = totalShards(actions, rank);
   const shardInputs = html.find(".fb-shard-input");
 
-  // Multi-target validation
   if (shardInputs.length > 1) {
     if (!validateAssignment(html, shards)) {
       ui.notifications.error(
@@ -229,7 +227,6 @@ async function onSubmit(html, { actorId, tokenId, dlg }) {
     }
   }
 
-  // Gather assignments from target rows
   const assignments = [];
   html.find(".fb-target-row").each(function () {
     const row = $(this);

@@ -27,12 +27,9 @@ function getDamageRollClass() {
  * @param {object} opts
  * @param {number} opts.actions
  * @param {number} opts.rank
- * @param {number} opts.flatBonus     - Global flat spell-damage bonus fallback (used when a
- *                                       target assignment does not carry its own flatBonus).
+ * @param {number} opts.flatBonus     - Global flat bonus fallback; overridden by target.flatBonus if set.
  * @param {number} opts.totalShards   - Grand total shards across all targets (flavor text only).
  * @param {Array}  opts.assignments   - [{ targetId, actorUuid, tokenUuid, name, shards, flatBonus? }]
- *                                       Each assignment may carry an optional per-target flatBonus
- *                                       that takes precedence over the global one.
  * @param {string|null} opts.actorId
  * @param {string|null} opts.tokenId
  */
@@ -54,11 +51,9 @@ export async function rollAndSendDamage({
 
 /**
  * Roll damage for one target group and post a chat card.
- * Always includes pf2e.target when a tokenUuid is available so PF2e
- * renders its native Apply Damage buttons.
+ * Includes pf2e.target flags when tokenUuid is available, enabling PF2e's apply-damage buttons.
  */
 async function rollForTarget({ target, flatBonus, actions, rank, totalShards, speaker, totalAssignments }) {
-  // Per-target bonus takes precedence; fall back to the global bonus, then 0.
   const bonus = target.flatBonus ?? flatBonus ?? 0;
   const formula = shardFormula(target.shards, bonus);
   const typedFormula = `(${formula})[${FORCE_DAMAGE_TYPE}]`;
@@ -80,9 +75,8 @@ async function rollForTarget({ target, flatBonus, actions, rank, totalShards, sp
 
     const flavor = buildFlavor({ target, actions, rank, totalShards, totalAssignments });
 
-    // pf2e.target is required for PF2e's native apply-damage buttons to appear.
-    // Actor-only assignments (no tokenUuid) will NOT show those buttons — this
-    // is by design since we cannot guarantee token context in all scenarios.
+    // pf2e.target is required for PF2e's native apply-damage buttons; omitted when
+    // tokenUuid is absent (actor-only targets will not show apply buttons).
     const pf2eTarget = target.tokenUuid
       ? { actor: target.actorUuid ?? null, token: target.tokenUuid }
       : undefined;
