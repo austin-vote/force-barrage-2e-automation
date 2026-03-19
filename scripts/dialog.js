@@ -44,8 +44,11 @@ export function openForceBarrageDialog({
           <option value="2" selected>2</option>
           <option value="3">3</option>
         </select>
-        <label style="font-size:0.85em; margin-left:auto;">Rank</label>
+        <label style="font-size:0.85em; margin-left:auto;${rankDetected ? " color:#888;" : ""}">
+          ${rankDetected ? '<i class="fas fa-check-circle" style="color:#5a9e5a; margin-right:2px;"></i>' : ""}Rank
+        </label>
         <input type="number" name="rank" value="${defaultRank}" min="1" max="10" step="1"
+               title="${rankDetected ? `Auto-detected from cast (rank ${defaultRank})` : "Enter spell rank"}"
                style="width:50px; text-align:center;${rankDetected ? " color:#888;" : ""}" />
       </div>
       <hr style="margin:4px 0 8px;" />
@@ -159,8 +162,10 @@ function attachLiveUpdate(html, hasTargets, actorId) {
     // Recalculate bonus from actor data whenever rank changes
     const { bonus, sources } = getSpellDamageBonus(actorId, rank);
     if (bonus > 0 && sources.length > 0) {
-      const detail = sources.map((s) => `+${s.value} ${s.label}`).join(", ");
-      bonusNoteEl.text(detail).show();
+      const fromPart = sources.length === 1
+        ? sources[0].label
+        : sources.map((s) => `+${s.value} ${s.label}`).join(", ");
+      bonusNoteEl.text(`Including +${bonus} spell damage from ${fromPart}`).show();
     } else {
       bonusNoteEl.text("").hide();
     }

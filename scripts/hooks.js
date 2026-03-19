@@ -276,10 +276,13 @@ const BONUS_TYPES = new Set(["status", "circumstance", "item", "untyped"]);
 /**
  * Normalize a modifier type string.  PF2e uses lowercase type names but some
  * modifiers might have empty or missing types — treat those as "untyped".
+ * "bonus" is an older/informal alias — also treat it as untyped.
  */
 function normalizeBonusType(raw) {
   const t = (raw ?? "").toLowerCase();
-  return BONUS_TYPES.has(t) ? t : t === "" ? "untyped" : null;
+  if (BONUS_TYPES.has(t)) return t;
+  if (t === "" || t === "bonus") return "untyped";
+  return null; // unknown type — caller decides whether to skip
 }
 
 /**
@@ -331,9 +334,18 @@ export function getSpellDamageBonus(actorId, rank = 1) {
   return empty;
 }
 
+// Item types that can carry FlatModifier rule elements for spell-damage.
+// In PF2e: feats (including class features tagged as feats), effects
+// (conditions, temporary buffs), actions (some class abilities), and heritages.
+const BONUS_ITEM_TYPES = new Set(["feat", "feature", "effect", "action", "heritage"]);
+
 /**
  * Scan actor items for FlatModifier rule elements targeting "spell-damage".
  * Resolves value expressions like "@spell.rank" using the known cast rank.
+ *
+ * If a rule element has a predicate, we include it but log the predicate so
+ * the caller can cross-check. We do not evaluate predicates since doing so
+ * correctly requires the full PF2e roll evaluation pipeline.
  */
 function resolveFromRuleElements(actor, rank) {
   const bestByType = {};
@@ -342,25 +354,49 @@ function resolveFromRuleElements(actor, rank) {
   const allCandidates = [];
 
   for (const item of actor.items) {
-    // Only check feat / feature / effect items
+    // Only check item types that realistically carry spell-damage bonuses
     const isRelevant = (typeof item.isOfType === "function")
-      ? item.isOfType("feat", "feature", "effect")
-      : ["feat", "feature", "effect"].includes(item.type ?? "");
+      ? item.isOfType("feat", "feature", "effect", "action", "heritage")
+      : BONUS_ITEM_TYPES.has(item.type ?? "");
     if (!isRelevant) continue;
 
     const rules = item.system?.rules ?? [];
     for (const rule of rules) {
       if (rule.key !== "FlatModifier") continue;
-      if (rule.selector !== "spell-damage") continue;
+
+      // selector can be a string or an array of strings in PF2e
+      const selectors = Array.isArray(rule.selector)
+        ? rule.selector
+        : typeof rule.selector === "string"
+          ? [rule.selector]
+          : [];
+      if (!selectors.includes("spell-damage")) continue;
 
       const val = resolveRuleValue(rule.value, rank);
       const type = normalizeBonusType(rule.type);
       const label = item.name ?? rule.label ?? "rule element";
+      const hasPredicate = Array.isArray(rule.predicate) && rule.predicate.length > 0;
 
-      allCandidates.push({ label, type, rawValue: rule.value, resolvedValue: val });
+      let skipReason = null;
+      if (val == null) skipReason = "value did not resolve";
+      else if (val <= 0) skipReason = `value resolved to ${val} (non-positive)`;
+      else if (type == null) skipReason = `unknown modifier type "${rule.type}" (not status/circumstance/item/untyped)`;
 
-      if (val == null || val <= 0) continue;
-      if (type == null) continue;
+      allCandidates.push({
+        label,
+        type,
+        rawValue: rule.value,
+        resolvedValue: val,
+        hasPredicate,
+        predicate: hasPredicate ? rule.predicate : undefined,
+        skipped: skipReason ?? false,
+      });
+
+      if (skipReason) continue;
+
+      if (hasPredicate) {
+        log(`getSpellDamageBonus (rules): "${label}" has predicate (not evaluated — including anyway)`, rule.predicate);
+      }
 
       if (type === "untyped") {
         untypedSum += val;
@@ -374,7 +410,7 @@ function resolveFromRuleElements(actor, rank) {
   }
 
   if (allCandidates.length > 0) {
-    log("getSpellDamageBonus (rules): candidates found", allCandidates);
+    log("getSpellDamageBonus (rules): candidates scanned", allCandidates);
   }
 
   let bonus = untypedSum;
