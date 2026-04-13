@@ -1,0 +1,30 @@
+{
+  "id": "force-barrage",
+  "title": "Force Barrage Automation",
+  "description": "A mmodule to automate force barrage in PF2E.",
+  "version": "1.0.0",
+  "compatibility": {
+    "minimum": "13",
+    "verified": "13"
+  },
+  "relationships": {
+    "systems": [
+      {
+        "id": "pf2e",
+        "type": "system",
+        "compatibility": {
+          "minimum": "7.0.0"
+        }
+      }
+    ]
+  },
+  "authors": [
+    {
+      "name": "Austin",
+      "url": "https://github.com/austin-vote"
+    }
+  ],
+  "manifest": "https://raw.githubusercontent.com/austin-vote/force-barrage-2e-automation/main/module.json",
+  "download": "https://github.com/austin-vote/force-barrage-2e-automation/archive/refs/heads/main.zip",
+  "esmodules": ["scripts/main.js"]
+}
